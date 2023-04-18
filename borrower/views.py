@@ -1,43 +1,72 @@
-from rest_framework import generics, status
-from rest_framework.response import Response
-from rest_framework.permissions import AllowAny,IsAuthenticated
-from .models import UserProfile, LoanRequest
-from .serializers import UserProfileSerializer, LoanRequestSerializer
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from borrower.models import Borrower, LoanRequest
+from borrower.serializers import BorrowerSerializer, LoanRequestSerializer
+from investor.models import LoanOffer
+from investor.serializers import LoanOfferSerializer
 
-from rest_framework_simplejwt.tokens import RefreshToken
+class BorrowerRegistrationView(generics.CreateAPIView):
+    serializer_class = BorrowerSerializer
 
-#Class based view to register user
-class RegisterUserAPIView(generics.CreateAPIView):
-    serializer_class = UserProfileSerializer
-    permission_classes = (AllowAny,)
-
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        refresh = RefreshToken.for_user(user)
-        res = {
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
-            "user": serializer.data,
-        }
-        return Response(res, status.HTTP_201_CREATED)
-    
-
-class UserProfileAPIView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserProfileSerializer
-    permission_classes = (IsAuthenticated,)
+class BorrowerProfileView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BorrowerSerializer
 
     def get_object(self):
-        return self.request.user.userprofile
+        return self.request.user.borrower
 
+class BorrowerDeactivateView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BorrowerSerializer
 
-class LoanRequestListAPIView(generics.ListCreateAPIView):
+    def get_object(self):
+        return self.request.user.borrower
+
+class BorrowerUpdateView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BorrowerSerializer
+
+    def get_object(self):
+        return self.request.user.borrower
+
+class LoanRequestCreateView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
     serializer_class = LoanRequestSerializer
-    permission_classes = (IsAuthenticated,)
-
-    def get_queryset(self):
-        return LoanRequest.objects.filter(borrower=self.request.user.userprofile)
 
     def perform_create(self, serializer):
-        serializer.save(borrower=self.request.user.userprofile)
+        serializer.save(borrower=self.request.user.borrower)
+
+class LoanRequestListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LoanRequestSerializer
+
+    def get_queryset(self):
+        return LoanRequest.objects.filter(borrower=self.request.user.borrower)
+
+class LoanRequestDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LoanRequestSerializer
+    queryset = LoanRequest.objects.all()
+
+class LoanOfferListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LoanOfferSerializer
+
+    def get_queryset(self):
+        pk = self.kwargs['pk']
+        return LoanOffer.objects.filter(loan_request__pk=pk)
+
+class LoanOfferApproveView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = LoanOfferSerializer
+    queryset = LoanOffer.objects.all()
+
+class BorrowerListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BorrowerSerializer
+    queryset = Borrower.objects.all()
+
+class AddBalanceView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BorrowerSerializer
+    queryset = Borrower.objects.all()

@@ -1,14 +1,10 @@
 from django.contrib import admin
-from .models import UserProfile, LoanRequest
+from .models import Borrower
 # Register your models here.
 
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('username',)
+class BorrowerAdmin(admin.ModelAdmin):
+    list_display = ('user','balance',)
+
+admin.site.register(Borrower, BorrowerAdmin)
 
 
-class LoanRequestAdmin(admin.ModelAdmin):
-    list_display = ('borrower', 'loan_amount')
-
-
-admin.site.register(UserProfile, UserProfileAdmin)
-admin.site.register(LoanRequest, LoanRequestAdmin)

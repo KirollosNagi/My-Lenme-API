@@ -1,16 +1,15 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-class UserProfile(models.Model):
+class Borrower(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    username = models.CharField(max_length=255)
-    full_name = models.CharField(max_length=255)
-    address = models.CharField(max_length=255)
-    phone_number = models.CharField(max_length=255)
-
-class LoanRequest(models.Model):
-    borrower = models.ForeignKey(UserProfile, on_delete=models.CASCADE)
-    loan_amount = models.DecimalField(max_digits=19, decimal_places=2)
-    loan_period = models.PositiveSmallIntegerField()
+    balance = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=255, default='active')
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # we can add the extra fields later
+    # phone_number = models.CharField(max_length=15)          # Assuming maximum length of 15 for phone number
+    # address = models.TextField()
+
+    def __str__(self):
+        return f'borrower: {self.user.username}'

@@ -1,9 +1,19 @@
 from django.urls import path
-from .views import UserProfileAPIView, LoanRequestListAPIView, RegisterUserAPIView
+from .views import BorrowerRegistrationView, BorrowerProfileView, BorrowerDeactivateView, BorrowerUpdateView, \
+    BorrowerListView, AddBalanceView
 
 urlpatterns = [
-    path('profile/', UserProfileAPIView.as_view(), name='user_profile'),
-    path('loan_requests/', LoanRequestListAPIView.as_view(), name='loan_request_list'),
-    path('register/',RegisterUserAPIView.as_view(), name='register'),
-
+    # Borrower (admin) list view
+    path('list/', BorrowerListView.as_view(), name='borrower-list'),
+    # Borrower registration
+    path('register/', BorrowerRegistrationView.as_view(), name='register'),
+    # Borrower profile view/update
+    path('profile/', BorrowerProfileView.as_view(), name='profile'),
+    # Borrower deactivate profile
+    path('deactivate/', BorrowerDeactivateView.as_view(), name='deactivate'),
+    # Borrower update profile
+    path('update/', BorrowerUpdateView.as_view(), name='update'),
+    # Add balance to borrower's account
+    path('add/balance/<int:pk>/', AddBalanceView.as_view(), name='add-balance'),
 ]
+

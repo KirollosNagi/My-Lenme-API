@@ -1,17 +1,11 @@
 from rest_framework import serializers
-from .models import UserProfile, LoanRequest
+from .models import Borrower
 
-class UserProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserProfile
-        fields = ('id', 'username','full_name', 'address', 'phone_number')
-
-
-
-class LoanRequestSerializer(serializers.ModelSerializer):
-    borrower = UserProfileSerializer(read_only=True)
+class BorrowerSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField()
 
     class Meta:
-        model = LoanRequest
-        fields = ('id', 'borrower', 'loan_amount', 'loan_period', 'created_at', 'status')
+        model = Borrower
+        fields = ['id','user', 'balance']
+
 
