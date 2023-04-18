@@ -1,19 +1,14 @@
 from django.urls import path
-from .views import BorrowerRegistrationView, BorrowerProfileView, BorrowerDeactivateView, BorrowerUpdateView, \
-    BorrowerListView, AddBalanceView
+from .views import BorrowerRegistrationView, BorrowerProfileView, BorrowerDeactivateView, BorrowerListView
 
 urlpatterns = [
     # Borrower (admin) list view
     path('list/', BorrowerListView.as_view(), name='borrower-list'),
     # Borrower registration
-    path('register/', BorrowerRegistrationView.as_view(), name='register'),
+    path('register/', BorrowerRegistrationView.as_view(), name='borrower-register'),
     # Borrower profile view/update
-    path('profile/', BorrowerProfileView.as_view(), name='profile'),
+    path('profile/', BorrowerProfileView.as_view(), name='borrower-profile'),
     # Borrower deactivate profile
-    path('deactivate/', BorrowerDeactivateView.as_view(), name='deactivate'),
-    # Borrower update profile
-    path('update/', BorrowerUpdateView.as_view(), name='update'),
-    # Add balance to borrower's account
-    path('add/balance/<int:pk>/', AddBalanceView.as_view(), name='add-balance'),
+    path('deactivate/', BorrowerDeactivateView.as_view(), name='borrower-deactivate'),
 ]
 

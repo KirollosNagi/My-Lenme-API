@@ -8,6 +8,6 @@ class LoanRequestAdmin(admin.ModelAdmin):
 admin.site.register(LoanRequest, LoanRequestAdmin)
 
 class LoanOfferAdmin(admin.ModelAdmin):
-    list_display = ('investor', 'Loan_request')
+    list_display = ('investor', 'interest_rate')
 
 admin.site.register(LoanOffer, LoanOfferAdmin)
