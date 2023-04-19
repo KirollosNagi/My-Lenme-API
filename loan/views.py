@@ -1,9 +1,18 @@
 
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
-from .models import LoanRequest, LoanOffer
-from .serializers import LoanRequestSerializer, LoanOfferSerializer
 from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.exceptions import ValidationError
+from django.db.models import Q
+
+from .models import LoanRequest, LoanOffer, Loan, Payment
+from .serializers import LoanRequestSerializer, LoanOfferSerializer, LoanSerializer, PaymentSerializer
+
+from decimal import Decimal
+from datetime import datetime, timedelta
+
+LENME_FEE = 3.00
 
 class LoanRequestListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -21,6 +30,7 @@ class LoanRequestListView(generics.ListAPIView):
             # User is neither a borrower nor an admin, return empty queryset
             return LoanRequest.objects.none()
 
+
 class LoanRequestCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = LoanRequestSerializer
@@ -33,28 +43,7 @@ class LoanRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = LoanRequest.objects.all()
     serializer_class = LoanRequestSerializer
 
-    def get_serializer_context(self):
-        # Pass the request user to the serializer context
-        context = super().get_serializer_context()
-        context['request_user'] = self.request.user
-        return context
 
-    def get(self, request, *args, **kwargs):
-        # TODO: Fix this view to display related loan offers for this specific loan request.
-        # Retrieve the loan request object
-        loan_request = self.get_object()
-        
-        # Get related loan offers
-        loan_offers = LoanOffer.objects.filter(loan_request=loan_request)
-        
-        # Serialize the loan request and loan offers
-        serializer = self.get_serializer(loan_request)
-        loan_offers_serializer = LoanOfferSerializer(loan_offers, many=True)
-        
-        # Add the serialized loan offers to the serialized loan request
-        serializer.data['loan_offers'] = loan_offers_serializer.data
-        
-        return Response(serializer.data)
 
 class LoanOfferListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
@@ -69,20 +58,141 @@ class LoanOfferListView(generics.ListCreateAPIView):
             result |= LoanOffer.objects.filter(loan_request__borrower=user.borrower)
             return result
         if hasattr(user, 'borrower'):
-            result = LoanOffer.objects.filter(loan_request__borrower=user.borrower)
+            return LoanOffer.objects.filter(loan_request__borrower=user.borrower)
         elif hasattr(user, 'investor'):
-            LoanOffer.objects.filter(investor=user.investor)
+            return LoanOffer.objects.filter(investor=user.investor)
         else:
             return LoanRequest.objects.none()
 
 class LoanOfferCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = LoanOfferSerializer
+    queryset = LoanOffer.objects.all()
 
     def perform_create(self, serializer):
-        serializer.save(investor=self.request.user.investor)
+        investor = self.request.user.investor
+        actual_balance = float(investor.balance - investor.on_hold)
+        loan_request = LoanRequest.objects.get(id=self.request.data.get('loan_request'))
+        total_amount = float(loan_request.loan_amount) + LENME_FEE
+        if actual_balance >= total_amount:
+            investor.on_hold += Decimal(total_amount)
+            investor.save()
+            serializer.save(investor=investor, loan_request=loan_request)
+        else:
+            raise ValidationError(f"Investor's balance is not sufficient to make the loan offer. add at least ${total_amount-actual_balance} to your balance first")
+        
 
 class LoanOfferDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = LoanOfferSerializer
     queryset = LoanOffer.objects.all()
+
+
+class LoanOfferAcceptView(generics.GenericAPIView):
+    serializer_class = LoanOfferSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        loan_offer = self.get_loan_offer(pk)
+
+        # Update loan request status to complete
+        loan_offer.loan_request.status = 'complete'
+        loan_offer.loan_request.save()
+
+        # Update accepted loan offer status to accepted
+        loan_offer.status = 'accepted'
+        loan_offer.save()
+
+        # Update all other loan offers for the same loan request to rejected
+        LoanOffer.objects.filter(loan_request=loan_offer.loan_request).exclude(pk=loan_offer.pk).update(status='rejected')
+
+        # Update investor balance
+        loan_offer.investor.balance -= loan_offer.loan_request.loan_amount + Decimal(LENME_FEE)
+        loan_offer.investor.on_hold -= loan_offer.loan_request.loan_amount + Decimal(LENME_FEE)
+        loan_offer.investor.save()
+
+        # Update borrower balance
+        loan_offer.loan_request.borrower.balance += loan_offer.loan_request.loan_amount
+        loan_offer.loan_request.borrower.save()
+
+        # Create a new loan object
+        loan = Loan()
+        loan.borrower = loan_offer.loan_request.borrower
+        loan.investor = loan_offer.investor
+        loan.initial_amount = loan_offer.loan_request.loan_amount
+        loan.remaining_amount = loan_offer.loan_request.loan_amount
+        loan.interest_rate = loan_offer.interest_rate
+        loan.duration = loan_offer.loan_request.loan_period
+        loan.installment_amount = loan.initial_amount * (1+loan.interest_rate) / (loan.duration)
+        loan.status = 'funded'
+        current_date = datetime.now().date()
+        loan.end_date = current_date + timedelta(days=30*loan.duration)
+        loan.save()
+
+        # Create loan schedule
+        loan.create_schedule()
+
+        # Serialize loan object and return response
+        loan_serializer = LoanSerializer(loan)
+        return Response(loan_serializer.data, status=status.HTTP_201_CREATED)
+
+    def get_loan_offer(self, pk):
+        # Helper method to retrieve LoanOffer object or raise 404 error
+        try:
+            return LoanOffer.objects.get(pk=pk)
+        except LoanOffer.DoesNotExist:
+            raise generics.Http404("LoanOffer not found")
+        
+
+class LoanListView(generics.ListCreateAPIView):
+    serializer_class = LoanSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            queryset = Loan.objects.all()
+        else:
+            queryset = Loan.objects.filter(Q(investor__user=user) | Q(borrower__user=user))
+        return queryset
+
+class LoanDetailView(generics.RetrieveAPIView):
+    queryset = Loan.objects.all()
+    serializer_class = LoanSerializer
+    permission_classes = [IsAuthenticated]
+
+class PaymentListView(generics.ListCreateAPIView):
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_staff:
+            queryset = Payment.objects.all()
+        else:
+            queryset = Payment.objects.filter(Q(loan__borrower__user=user) | Q(loan__investor__user=user))
+        return queryset
+
+class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        payment = serializer.instance
+        old_status = payment.status
+        new_status = self.request.data.get('status')
+        # if the status is updated
+        if old_status != new_status:
+            # get the related loan as we may update its status as well 
+            loan = payment.loan
+            other_payments = Payment.objects.filter(loan=loan).exclude(pk=payment.pk)
+            if new_status == 'paid':
+                if all(payment.status == 'paid' for payment in other_payments):
+                    loan.status = 'completed'
+                elif all(payment.status not in ['late', 'missed'] for payment in other_payments):
+                    loan.status = 'funded'
+            elif new_status in ['late', 'missed']:
+                loan.status = 'late'
+        loan.save()
+        serializer.save()
