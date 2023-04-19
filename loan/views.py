@@ -189,7 +189,6 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
             loan = payment.loan
             other_payments = Payment.objects.filter(loan=loan).exclude(pk=payment.pk)
             if new_status == 'paid':
-                loan = Loan()
                 loan.remaining_amount = loan.installment_amount * other_payments.exclude(status='paid').count()
                 if all(payment.status == 'paid' for payment in other_payments):
                     loan.status = 'completed'

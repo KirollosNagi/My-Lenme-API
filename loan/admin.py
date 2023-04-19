@@ -19,6 +19,6 @@ class LoanAdmin(admin.ModelAdmin):
 admin.site.register(Loan, LoanAdmin)
 
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('investor', 'interest_rate')
+    list_display = ('loan', 'installment_number', 'due_date', 'amount')
 
 admin.site.register(Payment, PaymentAdmin)
