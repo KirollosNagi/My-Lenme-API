@@ -120,14 +120,15 @@ class LoanOfferAcceptView(generics.GenericAPIView):
         loan.borrower = loan_offer.loan_request.borrower
         loan.investor = loan_offer.investor
         loan.initial_amount = loan_offer.loan_request.loan_amount
-        loan.remaining_amount = loan_offer.loan_request.loan_amount
         loan.interest_rate = loan_offer.interest_rate
         loan.duration = loan_offer.loan_request.loan_period
-        loan.installment_amount = loan.initial_amount * (1+loan.interest_rate) / (loan.duration)
         loan.status = 'funded'
         current_date = datetime.now().date()
         loan.end_date = current_date + timedelta(days=30*loan.duration)
+        loan.remaining_amount = loan.initial_amount * (1+loan.interest_rate)
+        loan.installment_amount = loan.initial_amount * (1+loan.interest_rate) / (loan.duration)
         loan.save()
+        
 
         # Create loan schedule
         loan.create_schedule()
@@ -184,15 +185,19 @@ class PaymentDetailView(generics.RetrieveUpdateDestroyAPIView):
         new_status = self.request.data.get('status')
         # if the status is updated
         if old_status != new_status:
-            # get the related loan as we may update its status as well 
+            # get the related loan as we may update its status as well and the remaining amount 
             loan = payment.loan
             other_payments = Payment.objects.filter(loan=loan).exclude(pk=payment.pk)
             if new_status == 'paid':
+                loan = Loan()
+                loan.remaining_amount = loan.installment_amount * other_payments.exclude(status='paid').count()
                 if all(payment.status == 'paid' for payment in other_payments):
                     loan.status = 'completed'
                 elif all(payment.status not in ['late', 'missed'] for payment in other_payments):
                     loan.status = 'funded'
             elif new_status in ['late', 'missed']:
+                loan.remaining_amount = loan.installment_amount * (1 + other_payments.exclude(status='paid').count())
+                # the 1+ is to account for this payment as well.
                 loan.status = 'late'
         loan.save()
         serializer.save()
