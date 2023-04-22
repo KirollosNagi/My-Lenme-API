@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q
+from django.shortcuts import redirect
+
 
 from .models import LoanRequest, LoanOffer, Loan, Payment
 from .serializers import LoanRequestSerializer, LoanOfferSerializer, LoanSerializer, PaymentSerializer
@@ -21,10 +23,10 @@ class LoanRequestListView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_staff or hasattr(user, 'investor'):
-            # User is a borrower, return only their loan requests
+            # User is an admin or investor, return all loan requests
             return LoanRequest.objects.all()
         elif hasattr(user, 'borrower'):
-            # User is an admin, return all loan requests
+            # User is a borrower, return only their loan requests
             return LoanRequest.objects.filter(borrower=user.borrower)
         else:
             # User is neither a borrower nor an admin, return empty queryset
@@ -37,6 +39,17 @@ class LoanRequestCreateView(generics.CreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(borrower=self.request.user.borrower)
+
+    def dispatch(self, request, *args, **kwargs):
+        """
+        Override dispatch() to redirect non-borrower users to the borrower registration page.
+        """
+        user = self.request.user
+
+        if not hasattr(user, 'borrower'):
+            # Redirect non-borrower users to the borrower registration page
+            return redirect('borrower-register')
+        return super(LoanRequestCreateView, self).dispatch(request, *args, **kwargs)
 
 class LoanRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated]
