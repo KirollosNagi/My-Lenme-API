@@ -96,8 +96,7 @@ The API uses token-based authentication for authorized access to protected endpo
 ## Testing
 To run tests for the API, use the following command:
 
-
-python manage.py test
+        python manage.py test
 
 ## Built With
 * Django - Python web framework
