@@ -33,9 +33,9 @@ def test_borrower_registration_view(logged_client):
 
 
     assert Borrower.objects.count() == 1
-    investor = Borrower.objects.first()
-    assert investor.user == logged_client.user
-    assert investor.balance == Decimal('1000.00')
+    borrower = Borrower.objects.first()
+    assert borrower.user == logged_client.user
+    assert borrower.balance == Decimal('1000.00')
 
     # Clean up objects created during testing
     Borrower.objects.filter(user=logged_client.user).delete()
